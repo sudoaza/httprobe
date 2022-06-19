@@ -68,13 +68,13 @@ func main() {
 		}).DialContext,
 	}
 
-	re := func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
+//	re := func(req *http.Request, via []*http.Request) error {
+//		return http.ErrUseLastResponse
+//	}
 
 	client := &http.Client{
 		Transport:     tr,
-		CheckRedirect: re,
+	//	CheckRedirect: re,
 		Timeout:       timeout,
 	}
 
@@ -96,8 +96,9 @@ func main() {
 
 				// always try HTTPS first
 				withProto := "https://" + url
-				if isListening(client, withProto, method) {
-					output <- withProto
+				finalURL := isListening(client, withProto, method)
+				if finalURL != "" {
+					output <- finalURL
 
 					// skip trying HTTP if --prefer-https is set
 					if preferHTTPS {
@@ -120,8 +121,9 @@ func main() {
 		go func() {
 			for url := range httpURLs {
 				withProto := "http://" + url
-				if isListening(client, withProto, method) {
-					output <- withProto
+				finalURL := isListening(client, withProto, method)
+				if finalURL != "" {
+					output <- finalURL
 					continue
 				}
 			}
@@ -210,25 +212,26 @@ func main() {
 	outputWG.Wait()
 }
 
-func isListening(client *http.Client, url, method string) bool {
+func isListening(client *http.Client, url, method string) string {
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return false
+		return ""
 	}
 
 	req.Header.Add("Connection", "close")
 	req.Close = true
 
 	resp, err := client.Do(req)
+	finalURL := resp.Request.URL.String()
 	if resp != nil {
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}
 
 	if err != nil {
-		return false
+		return ""
 	}
 
-	return true
+	return finalURL
 }
